@@ -39,6 +39,8 @@ pub use negotiation::NegotiationAction;
 use std::io;
 use std::io::{Read, Write, ErrorKind};
 use std::net::{TcpStream, ToSocketAddrs};
+use std::os::unix::net::UnixStream;
+use std::path::Path;
 use std::time::Duration;
 
 use event::TelnetEventQueue;
@@ -47,7 +49,7 @@ use byte::*;
 #[cfg(feature = "zcstream")]
 type TStream = zcstream::ZCStream;
 #[cfg(not(feature = "zcstream"))]
-type TStream = stream::Stream;
+type TStream = dyn stream::Stream;
 
 #[derive(Debug)]
 enum ProcessState {
@@ -105,6 +107,15 @@ impl Telnet {
     ///
     pub fn connect<A: ToSocketAddrs>(addr: A, buf_size: usize) -> io::Result<Telnet> {
         let stream = TcpStream::connect(addr)?; // send the error out directly
+
+        #[cfg(feature = "zcstream")]
+        return Ok(Telnet::from_stream(Box::new(ZlibStream::from_stream(stream)), buf_size));
+        #[cfg(not(feature = "zcstream"))]
+        return Ok(Telnet::from_stream(Box::new(stream), buf_size));
+    }
+
+    pub fn connect_unix<P: AsRef<Path>>(path: P, buf_size: usize) -> io::Result<Telnet> {
+        let stream = UnixStream::connect(path)?; // send the error out directly
 
         #[cfg(feature = "zcstream")]
         return Ok(Telnet::from_stream(Box::new(ZlibStream::from_stream(stream)), buf_size));
